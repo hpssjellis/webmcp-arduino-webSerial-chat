@@ -1,0 +1,560 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>DeviceChat — Admin</title>
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600;700&family=IBM+Plex+Sans:wght@300;400;600;700&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg: #0d0f14;
+      --surface: #141820;
+      --surface2: #1a2030;
+      --border: #2a3040;
+      --text: #dde3ec;
+      --muted: #7a8499;
+      --accent: #79bfff;
+      --green: #4fd060;
+      --orange: #ffaa55;
+      --red: #f85149;
+      --purple: #d2a8ff;
+      --yellow: #e3b341;
+      --mono: 'IBM Plex Mono', monospace;
+      --sans: 'IBM Plex Sans', sans-serif;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: var(--sans); background: var(--bg); color: var(--text); min-height: 100vh; }
+
+    header {
+      background: var(--surface); border-bottom: 1px solid var(--border);
+      padding: 12px 20px; display: flex; align-items: center; gap: 12px;
+      position: sticky; top: 0; z-index: 50;
+    }
+    .logo { font-family: var(--mono); font-size: 0.95rem; font-weight: 700; color: var(--orange); letter-spacing: 0.04em; }
+    .badge { font-family: var(--mono); font-size: 0.65rem; padding: 3px 8px; border-radius: 3px; background: var(--surface2); border: 1px solid var(--border); color: var(--muted); }
+    .badge.live { color: var(--green); border-color: #4fd06033; }
+    #timerDisplay { margin-left: auto; font-family: var(--mono); font-size: 0.78rem; color: var(--muted); }
+
+    .layout { display: grid; grid-template-columns: 1fr 1fr 340px; gap: 14px; max-width: 1400px; margin: 0 auto; padding: 16px; }
+    @media (max-width: 1100px) { .layout { grid-template-columns: 1fr 340px; } }
+    @media (max-width: 768px)  { .layout { grid-template-columns: 1fr; } }
+
+    /* Login */
+    #loginPanel {
+      max-width: 420px; margin: 60px auto; padding: 28px;
+      background: var(--surface); border: 1px solid var(--border); border-radius: 10px;
+    }
+    #loginPanel h2 { font-size: 1rem; font-weight: 700; margin-bottom: 6px; color: var(--orange); font-family: var(--mono); }
+    #loginPanel p { font-size: 0.78rem; color: var(--muted); margin-bottom: 20px; line-height: 1.6; }
+    .field { margin-bottom: 12px; }
+    .field label { display: block; font-size: 0.65rem; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 5px; }
+    .inp { width: 100%; padding: 9px 13px; border: 1px solid var(--border); border-radius: 6px; font-family: var(--mono); font-size: 0.82rem; background: var(--bg); color: var(--text); transition: border-color 0.2s; }
+    .inp:focus { outline: none; border-color: var(--accent); }
+    select.inp { cursor: pointer; }
+    .btn { padding: 10px 18px; border: none; border-radius: 6px; font-family: var(--sans); font-weight: 700; font-size: 0.85rem; cursor: pointer; transition: all 0.15s; }
+    .btn:active { transform: scale(0.97); }
+    .btn-orange { background: var(--orange); color: #0d0f14; }
+    .btn-orange:hover { background: #ffc077; }
+    .btn-full { width: 100%; }
+    .err { color: var(--red); font-size: 0.72rem; margin-top: 8px; display: none; }
+
+    /* Panels */
+    .panel { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; overflow: hidden; margin-bottom: 12px; }
+    .panel-hdr { padding: 10px 14px; background: var(--surface2); border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap; }
+    .panel-title { font-family: var(--mono); font-size: 0.65rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.1em; color: var(--muted); }
+
+    /* Stats grid */
+    .stat-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; padding: 12px; }
+    .stat { background: var(--surface2); border: 1px solid var(--border); border-radius: 6px; padding: 12px; text-align: center; }
+    .stat-num { font-family: var(--mono); font-size: 1.6rem; font-weight: 700; color: var(--accent); }
+    .stat-num.orange { color: var(--orange); }
+    .stat-num.green  { color: var(--green); }
+    .stat-num.red    { color: var(--red); }
+    .stat-lbl { font-size: 0.6rem; color: var(--muted); text-transform: uppercase; letter-spacing: 0.06em; margin-top: 2px; }
+
+    /* Device list */
+    .device-row { display: flex; align-items: center; gap: 10px; padding: 10px 14px; border-bottom: 1px solid var(--border); transition: background 0.15s; }
+    .device-row:last-child { border-bottom: none; }
+    .device-row:hover { background: var(--surface2); }
+    .d-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--green); flex-shrink: 0; animation: blink 2s infinite; }
+    .d-dot.offline { background: var(--red); animation: none; }
+    @keyframes blink { 0%,100%{opacity:1} 50%{opacity:0.4} }
+    .d-name { font-family: var(--mono); font-size: 0.8rem; color: var(--green); flex: 1; }
+    .d-id   { font-size: 0.62rem; color: var(--muted); }
+    .d-last { font-size: 0.62rem; color: var(--muted); }
+    .icon-btn { padding: 4px 8px; border: 1px solid var(--border); border-radius: 4px; font-size: 0.68rem; font-family: var(--mono); background: transparent; color: var(--muted); cursor: pointer; transition: all 0.15s; white-space: nowrap; }
+    .icon-btn:hover { border-color: var(--accent); color: var(--accent); }
+    .icon-btn.red:hover { border-color: var(--red); color: var(--red); }
+
+    /* Participant list */
+    .p-row { display: flex; align-items: center; gap: 8px; padding: 8px 14px; border-bottom: 1px solid var(--border); }
+    .p-row:last-child { border-bottom: none; }
+    .p-name { font-size: 0.82rem; flex: 1; }
+    .p-count { font-family: var(--mono); font-size: 0.68rem; color: var(--muted); }
+
+    /* JSON log */
+    #jsonLog { height: 340px; overflow-y: auto; padding: 10px; display: flex; flex-direction: column; gap: 6px; }
+    .jlog { border-radius: 5px; padding: 7px 10px; border: 1px solid transparent; animation: fadein 0.2s ease; }
+    @keyframes fadein { from{opacity:0} to{opacity:1} }
+    .jlog-cmd { background: #0a1020; border-color: #58a6ff22; }
+    .jlog-cmd .jh { font-size: 0.62rem; color: var(--accent); margin-bottom: 4px; }
+    .jlog-cmd .jb { font-family: var(--mono); font-size: 0.7rem; color: #79b8ff; white-space: pre-wrap; word-break: break-all; }
+    .jlog-reply { background: #080e08; border-color: #4fd06022; }
+    .jlog-reply .jh { font-size: 0.62rem; color: var(--green); margin-bottom: 4px; }
+    .jlog-reply .jb { font-family: var(--mono); font-size: 0.7rem; color: #80cc80; white-space: pre-wrap; word-break: break-all; }
+
+    /* Server log */
+    #serverLogEl { height: 220px; overflow-y: auto; padding: 10px; font-family: var(--mono); font-size: 0.68rem; line-height: 1.8; }
+    .log-entry { padding: 2px 0; border-bottom: 1px solid #1a2030; }
+    .log-entry.admin  { color: var(--orange); }
+    .log-entry.device { color: var(--green); }
+    .log-entry.json   { color: var(--accent); }
+    .log-entry.join   { color: var(--purple); }
+    .log-entry.leave  { color: var(--muted); }
+    .log-entry.warn   { color: var(--red); }
+    .log-entry.info   { color: #6a7a8a; }
+
+    /* Admin JSON send */
+    .send-area { padding: 12px 14px; border-top: 1px solid var(--border); display: flex; flex-direction: column; gap: 8px; }
+    .send-row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+    .btn-sm { padding: 7px 12px; border: none; border-radius: 5px; font-family: var(--mono); font-weight: 700; font-size: 0.72rem; cursor: pointer; transition: all 0.15s; white-space: nowrap; }
+    .btn-sm:active { transform: scale(0.96); }
+    .btn-blue   { background: var(--accent); color: #0d0f14; }
+    .btn-blue:hover { background: #a8d2ff; }
+    .btn-orange { background: var(--orange); color: #0d0f14; }
+    .btn-orange:hover { background: #ffc077; }
+    .btn-red    { background: var(--red); color: white; }
+    .btn-red:hover { background: #ff7070; }
+    .btn-ghost  { background: transparent; color: var(--muted); border: 1px solid var(--border); }
+    .btn-ghost:hover { border-color: var(--accent); color: var(--accent); }
+    .inp-sm { flex: 1; padding: 7px 10px; border: 1px solid var(--border); border-radius: 5px; font-family: var(--mono); font-size: 0.75rem; background: var(--bg); color: var(--text); }
+    .inp-sm:focus { outline: none; border-color: var(--accent); }
+    textarea.inp-sm { resize: vertical; min-height: 72px; line-height: 1.5; }
+    select.inp-sm { cursor: pointer; }
+
+    /* Timer controls */
+    .timer-row { display: flex; align-items: center; gap: 8px; padding: 10px 14px; flex-wrap: wrap; }
+    .t-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--muted); flex-shrink: 0; }
+    .t-dot.running { background: var(--green); box-shadow: 0 0 6px var(--green); animation: blink 1.4s infinite; }
+
+    .empty-state { padding: 24px; text-align: center; font-family: var(--mono); font-size: 0.72rem; color: var(--muted); }
+
+    ::-webkit-scrollbar { width: 3px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+  </style>
+</head>
+<body>
+
+<header>
+  <div class="logo">⚡ ADMIN</div>
+  <div class="badge" id="roomBadge" style="display:none"></div>
+  <div class="badge live" id="liveBadge" style="display:none">● LIVE</div>
+  <div id="timerDisplay">—</div>
+</header>
+
+<!-- LOGIN -->
+<div id="loginPanel">
+  <h2>ADMIN LOGIN</h2>
+  <p>Create or join a room as admin. You control devices, participants, and all JSON traffic.</p>
+  <div class="field"><label>Name</label><input id="aName" class="inp" placeholder="e.g. Lab Admin" autocomplete="off"></div>
+  <div class="field"><label>Room Name</label><input id="aRoom" class="inp" placeholder="Create new or join existing" autocomplete="off"></div>
+  <div class="field"><label>Password</label><input id="aPass" class="inp" type="password" placeholder="Required for new rooms"></div>
+  <div id="aError" class="err"></div>
+  <button class="btn btn-orange btn-full" id="adminLoginBtn">Enter Admin Dashboard →</button>
+</div>
+
+<!-- DASHBOARD -->
+<div class="layout" id="dashboard" style="display:none">
+
+  <!-- COLUMN 1 -->
+  <div>
+    <!-- Stats -->
+    <div class="panel">
+      <div class="panel-hdr"><div class="panel-title">📊 Overview</div></div>
+      <div class="stat-grid">
+        <div class="stat"><div class="stat-num green" id="statDevices">0</div><div class="stat-lbl">Devices</div></div>
+        <div class="stat"><div class="stat-num" id="statParts">0</div><div class="stat-lbl">Participants</div></div>
+        <div class="stat"><div class="stat-num orange" id="statJsonRx">0</div><div class="stat-lbl">JSON In</div></div>
+        <div class="stat"><div class="stat-num" id="statJsonTx">0</div><div class="stat-lbl">JSON Out</div></div>
+      </div>
+    </div>
+
+    <!-- Devices -->
+    <div class="panel">
+      <div class="panel-hdr">
+        <div class="panel-title">🔌 Devices</div>
+        <button class="btn-sm btn-orange" id="pingAllBtn">📡 Ping All</button>
+      </div>
+      <div id="deviceListEl"><div class="empty-state">No devices connected</div></div>
+      <div class="send-area">
+        <div class="panel-title" style="margin-bottom:6px;">Send JSON to Device</div>
+        <div class="send-row">
+          <select id="adminDeviceTarget" class="inp-sm" style="flex:0 0 160px;"><option value="all">All Devices</option></select>
+        </div>
+        <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:4px;">
+          <button class="btn-sm btn-ghost" onclick="adminSetTemplate('display')" style="font-size:0.65rem;">📺 display</button>
+          <button class="btn-sm btn-ghost" onclick="adminSetTemplate('led')" style="font-size:0.65rem;">💡 led</button>
+          <button class="btn-sm btn-ghost" onclick="adminSetTemplate('ping')" style="font-size:0.65rem;">📡 ping</button>
+          <button class="btn-sm btn-ghost" onclick="adminSetTemplate('clear')" style="font-size:0.65rem;">🗑 clear</button>
+        </div>
+        <textarea id="adminJsonCmd" class="inp-sm" placeholder='{"cmd":"display","text":"Admin message"}'></textarea>
+        <div class="send-row">
+          <button class="btn-sm btn-blue" id="adminSendJsonBtn">⚡ Send JSON</button>
+          <span id="adminJsonErr" style="font-size:0.68rem;color:var(--red);display:none;"></span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Admin broadcast -->
+    <div class="panel">
+      <div class="panel-hdr"><div class="panel-title">📢 Broadcast to Participants</div></div>
+      <div class="send-area">
+        <div style="display:flex;gap:8px;">
+          <input id="broadcastText" class="inp-sm" placeholder="Message to all participants…">
+          <button class="btn-sm btn-orange" id="broadcastBtn">📢 Send</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Timer -->
+    <div class="panel">
+      <div class="panel-hdr"><div class="panel-title">⏱ Session Timer</div></div>
+      <div class="timer-row">
+        <div class="t-dot" id="timerDot"></div>
+        <button class="btn-sm btn-blue" id="timerToggleBtn">▶ Start</button>
+        <input id="timerDurInput" class="inp-sm" type="number" min="10" placeholder="sec" style="width:72px;flex:0;">
+        <button class="btn-sm btn-ghost" id="timerSetBtn">Set</button>
+        <span id="timerVal" style="font-family:var(--mono);font-size:0.78rem;color:var(--muted);margin-left:auto;">—</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- COLUMN 2 -->
+  <div>
+    <!-- Participants -->
+    <div class="panel">
+      <div class="panel-hdr"><div class="panel-title">👥 Participants</div></div>
+      <div id="participantsEl"><div class="empty-state">No participants yet</div></div>
+    </div>
+
+    <!-- JSON traffic log -->
+    <div class="panel">
+      <div class="panel-hdr">
+        <div class="panel-title">⚡ JSON Traffic Log</div>
+        <button class="btn-sm btn-ghost" onclick="document.getElementById('jsonLog').innerHTML=''" style="font-size:0.62rem;">Clear</button>
+      </div>
+      <div id="jsonLog"><div class="empty-state">No JSON traffic yet</div></div>
+    </div>
+  </div>
+
+  <!-- COLUMN 3: server log + controls -->
+  <div>
+    <!-- Server log -->
+    <div class="panel">
+      <div class="panel-hdr">
+        <div class="panel-title">🖥 Server Log</div>
+        <button class="btn-sm btn-ghost" onclick="document.getElementById('serverLogEl').innerHTML=''" style="font-size:0.62rem;">Clear</button>
+      </div>
+      <div id="serverLogEl"><div class="empty-state" style="font-family:var(--mono);">Waiting for log…</div></div>
+    </div>
+
+    <!-- Danger zone -->
+    <div class="panel">
+      <div class="panel-hdr"><div class="panel-title" style="color:var(--red);">⚠️ Danger Zone</div></div>
+      <div style="padding:14px;display:flex;flex-direction:column;gap:8px;">
+        <button class="btn-sm btn-red" id="shutdownBtn">⏻ Shutdown Room &amp; Disconnect All</button>
+        <div style="font-size:0.68rem;color:var(--muted);line-height:1.6;">Shutting down disconnects all participants and devices and deletes the room.</div>
+      </div>
+    </div>
+
+    <!-- Share links -->
+    <div class="panel">
+      <div class="panel-hdr"><div class="panel-title">🔗 Share Links</div></div>
+      <div style="padding:12px 14px;display:flex;flex-direction:column;gap:8px;">
+        <div style="font-size:0.68rem;color:var(--muted);">Participant Page</div>
+        <div style="display:flex;gap:6px;">
+          <input id="shareParticipant" class="inp-sm" readonly style="font-size:0.68rem;">
+          <button class="btn-sm btn-ghost" onclick="copyUrl('shareParticipant')" style="font-size:0.65rem;">Copy</button>
+        </div>
+        <div style="font-size:0.68rem;color:var(--muted);margin-top:4px;">Device Bridge Page</div>
+        <div style="display:flex;gap:6px;">
+          <input id="shareDevice" class="inp-sm" readonly style="font-size:0.68rem;">
+          <button class="btn-sm btn-ghost" onclick="copyUrl('shareDevice')" style="font-size:0.65rem;">Copy</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- MCP endpoint info -->
+    <div class="panel">
+      <div class="panel-hdr"><div class="panel-title">🤖 MCP Endpoints</div></div>
+      <div style="padding:12px 14px;display:flex;flex-direction:column;gap:8px;">
+        <div style="font-size:0.68rem;color:var(--muted);">HTTP (JSON-RPC POST)</div>
+        <div style="display:flex;gap:6px;">
+          <input id="mcpHttpUrl" class="inp-sm" readonly style="font-size:0.68rem;color:var(--accent);">
+          <button class="btn-sm btn-ghost" onclick="copyUrl('mcpHttpUrl')" style="font-size:0.65rem;">Copy</button>
+        </div>
+        <div style="font-size:0.68rem;color:var(--muted);margin-top:2px;">SSE Stream</div>
+        <div style="display:flex;gap:6px;">
+          <input id="mcpSseUrl" class="inp-sm" readonly style="font-size:0.68rem;color:var(--purple);">
+          <button class="btn-sm btn-ghost" onclick="copyUrl('mcpSseUrl')" style="font-size:0.65rem;">Copy</button>
+        </div>
+        <div id="mcpToolsList" style="margin-top:8px;font-family:'IBM Plex Mono',monospace;font-size:0.62rem;color:var(--muted);line-height:1.8;background:var(--surface2);border:1px solid var(--border);border-radius:5px;padding:8px;max-height:140px;overflow-y:auto;">
+          No tools yet — connect a device.
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+</div><!-- end layout -->
+
+<script src="/socket.io/socket.io.js"></script>
+<script>
+  const socket = io();
+  let myRoom = '', timerRunning = false, timerMax = 120;
+  let jsonRx = 0, jsonTx = 0;
+
+  // ── Room list ─────────────────────────────────────────────
+  socket.on('roomList', () => {}); // admin creates, no dropdown needed
+
+  // ── Login ─────────────────────────────────────────────────
+  document.getElementById('adminLoginBtn').addEventListener('click', adminLogin);
+  ['aName','aRoom','aPass'].forEach(id =>
+    document.getElementById(id).addEventListener('keydown', e => { if (e.key === 'Enter') adminLogin(); }));
+
+  function adminLogin() {
+    const name = document.getElementById('aName').value.trim();
+    const roomName = document.getElementById('aRoom').value.trim();
+    const password = document.getElementById('aPass').value;
+    if (!name || !roomName) { showErr('aError', 'Name and room required.'); return; }
+    socket.emit('adminLogin', { roomName, password, name });
+  }
+
+  socket.on('authError', msg => showErr('aError', '⚠ ' + msg));
+
+  socket.on('adminAuthSuccess', (data) => {
+    myRoom = data.roomName;
+    document.getElementById('loginPanel').style.display = 'none';
+    document.getElementById('dashboard').style.display = 'grid';
+    document.getElementById('roomBadge').textContent = '# ' + data.roomName;
+    document.getElementById('roomBadge').style.display = 'block';
+    document.getElementById('liveBadge').style.display = 'block';
+    timerMax = data.timer || 120;
+    document.getElementById('timerDurInput').value = timerMax;
+
+    // Set share URLs
+    const base = location.origin;
+    document.getElementById('shareParticipant').value = base + '/';
+    document.getElementById('shareDevice').value = base + '/device';
+    document.getElementById('mcpHttpUrl').value  = data.mcpEndpoint || base + '/room/' + data.roomName + '/mcp';
+    document.getElementById('mcpSseUrl').value   = data.mcpSse      || base + '/room/' + data.roomName + '/mcp/sse';
+
+    // Restore logs
+    if (data.logs) data.logs.forEach(l => appendLog(l));
+
+    // Restore presence
+    if (data.participants) renderParticipants(data.participants);
+    if (data.devices)      renderDevices(data.devices);
+  });
+
+  // MCP tool list update from server
+  socket.on('mcpToolsUpdated', (data) => {
+    const el = document.getElementById('mcpToolsList');
+    if (data.tools && data.tools.length) {
+      el.textContent = data.tools.join('\n');
+    } else {
+      el.textContent = 'No tools — connect a device.';
+    }
+  });
+
+  // ── Presence ──────────────────────────────────────────────
+  socket.on('presenceUpdate', (data) => {
+    renderDevices(data.devices || []);
+    renderParticipants(data.participants || []);
+    document.getElementById('statDevices').textContent = (data.devices || []).length;
+    document.getElementById('statParts').textContent   = (data.participants || []).length;
+  });
+
+  socket.on('deviceStatusChange', (data) => {
+    const dot = document.querySelector(`[data-device-id="${data.deviceId}"] .d-dot`);
+    if (dot) dot.className = 'd-dot' + (data.status === 'online' ? '' : ' offline');
+  });
+
+  function renderDevices(devices) {
+    const el = document.getElementById('deviceListEl');
+    const sel = document.getElementById('adminDeviceTarget');
+    const prev = sel.value;
+    if (!devices.length) {
+      el.innerHTML = '<div class="empty-state">No devices connected</div>';
+      sel.innerHTML = '<option value="all">All Devices</option>';
+      return;
+    }
+    el.innerHTML = devices.map(d => `
+      <div class="device-row" data-device-id="${d.id}">
+        <div class="d-dot ${d.status === 'offline' ? 'offline' : ''}"></div>
+        <div style="flex:1;">
+          <div class="d-name">${esc(d.name)}</div>
+          <div class="d-id">${d.id.slice(0,10)}… · last seen ${d.lastSeen ? relTime(d.lastSeen) : '?'}</div>
+        </div>
+        <button class="icon-btn" onclick="adminSendTo('${d.id}')">⚡ CMD</button>
+        <button class="icon-btn red" onclick="disconnectDevice('${d.id}')">✕</button>
+      </div>`).join('');
+    sel.innerHTML = '<option value="all">All Devices</option>' +
+      devices.map(d => `<option value="${d.id}">${esc(d.name)}</option>`).join('');
+    if (prev) sel.value = prev;
+  }
+
+  function renderParticipants(parts) {
+    const el = document.getElementById('participantsEl');
+    if (!parts.length) { el.innerHTML = '<div class="empty-state">No participants</div>'; return; }
+    el.innerHTML = parts.map(p => `
+      <div class="p-row">
+        <div class="p-name">${esc(p.name)}</div>
+        <div class="p-count">${p.msgCount || 0}</div>
+        <button class="icon-btn red" onclick="kickUser('${p.id}', '${esc(p.name)}')">✕ kick</button>
+      </div>`).join('');
+  }
+
+  function kickUser(id, name) {
+    if (!confirm(`Kick "${name}"?`)) return;
+    socket.emit('kickUser', { roomName: myRoom, userId: id });
+  }
+
+  function disconnectDevice(id) {
+    if (!confirm('Disconnect this device?')) return;
+    socket.emit('disconnectDevice', { roomName: myRoom, deviceId: id });
+  }
+
+  // ── JSON log ──────────────────────────────────────────────
+  socket.on('jsonLogEntry', (entry) => {
+    appendJsonLog(entry);
+    if (entry.direction === '←') { jsonRx++; document.getElementById('statJsonRx').textContent = jsonRx; }
+    else { jsonTx++; document.getElementById('statJsonTx').textContent = jsonTx; }
+  });
+
+  function appendJsonLog(entry) {
+    const feed = document.getElementById('jsonLog');
+    const empty = feed.querySelector('.empty-state');
+    if (empty) empty.remove();
+    const d = document.createElement('div');
+    d.className = 'jlog ' + (entry.direction === '←' ? 'jlog-reply' : 'jlog-cmd');
+    d.innerHTML = `<div class="jh">${esc(entry.direction)} ${esc(entry.from)} → ${esc(entry.to)} [${esc(entry.ts)}]</div><div class="jb">${esc(JSON.stringify(entry.payload, null, 2))}</div>`;
+    feed.appendChild(d); feed.scrollTop = feed.scrollHeight;
+    if (feed.children.length > 100) feed.removeChild(feed.firstChild);
+  }
+
+  // ── Server log ────────────────────────────────────────────
+  socket.on('serverLog', (entry) => appendLog(entry));
+
+  function appendLog(entry) {
+    const el = document.getElementById('serverLogEl');
+    const empty = el.querySelector('.empty-state');
+    if (empty) empty.remove();
+    const d = document.createElement('div');
+    d.className = 'log-entry ' + (entry.type || 'info');
+    d.textContent = `[${entry.ts}] ${entry.message}`;
+    el.appendChild(d); el.scrollTop = el.scrollHeight;
+    if (el.children.length > 200) el.removeChild(el.firstChild);
+  }
+
+  // ── Admin JSON send ───────────────────────────────────────
+  document.getElementById('adminSendJsonBtn').addEventListener('click', adminSendJson);
+
+  function adminSendJson() {
+    const raw = document.getElementById('adminJsonCmd').value.trim();
+    const errEl = document.getElementById('adminJsonErr');
+    let payload;
+    try { payload = JSON.parse(raw); } catch (e) { errEl.textContent = 'Invalid JSON'; errEl.style.display = 'inline'; return; }
+    errEl.style.display = 'none';
+    const target = document.getElementById('adminDeviceTarget').value;
+    socket.emit('adminSendJSON', { roomName: myRoom, targetDeviceId: target, payload });
+  }
+
+  function adminSendTo(deviceId) {
+    document.getElementById('adminDeviceTarget').value = deviceId;
+    document.getElementById('adminJsonCmd').focus();
+  }
+
+  function adminSetTemplate(t) {
+    const templates = {
+      display: '{"cmd":"display","text":"Admin message","line":1}',
+      led:     '{"cmd":"led","r":0,"g":255,"b":0,"brightness":100}',
+      ping:    '{"cmd":"ping","ts":' + Date.now() + '}',
+      clear:   '{"cmd":"clear_display"}'
+    };
+    document.getElementById('adminJsonCmd').value = templates[t] || '{}';
+  }
+
+  document.getElementById('pingAllBtn').addEventListener('click', () => {
+    socket.emit('adminSendJSON', { roomName: myRoom, targetDeviceId: 'all', payload: { cmd: 'ping', ts: Date.now() } });
+  });
+
+  // ── Broadcast ─────────────────────────────────────────────
+  document.getElementById('broadcastBtn').addEventListener('click', () => {
+    const text = document.getElementById('broadcastText').value.trim();
+    if (!text) return;
+    socket.emit('adminBroadcast', { roomName: myRoom, text });
+    document.getElementById('broadcastText').value = '';
+  });
+  document.getElementById('broadcastText').addEventListener('keydown', e => { if (e.key === 'Enter') document.getElementById('broadcastBtn').click(); });
+
+  // ── Timer ─────────────────────────────────────────────────
+  let timerVal = 0;
+  socket.on('timerSync', (val) => {
+    timerVal = val;
+    document.getElementById('timerVal').textContent = val + 's';
+    document.getElementById('timerDisplay').textContent = val + 's';
+  });
+  socket.on('timerState', (data) => {
+    timerMax = data.duration;
+    document.getElementById('timerDurInput').value = data.duration;
+    updateTimerUI(data.running);
+  });
+
+  document.getElementById('timerToggleBtn').addEventListener('click', () => {
+    socket.emit('timerControl', { roomName: myRoom, action: timerRunning ? 'stop' : 'start' });
+  });
+  document.getElementById('timerSetBtn').addEventListener('click', () => {
+    const d = parseInt(document.getElementById('timerDurInput').value);
+    if (d >= 5) socket.emit('timerControl', { roomName: myRoom, action: 'setDuration', duration: d });
+  });
+
+  function updateTimerUI(running) {
+    timerRunning = running;
+    const dot = document.getElementById('timerDot');
+    const btn = document.getElementById('timerToggleBtn');
+    dot.className = 't-dot' + (running ? ' running' : '');
+    btn.textContent = running ? '⏸ Stop' : '▶ Start';
+    btn.className = 'btn-sm ' + (running ? 'btn-orange' : 'btn-blue');
+  }
+
+  // ── Shutdown ──────────────────────────────────────────────
+  document.getElementById('shutdownBtn').addEventListener('click', () => {
+    if (!confirm(`Shutdown room "${myRoom}"? This disconnects ALL participants and devices.`)) return;
+    socket.emit('shutdownRoom', myRoom);
+  });
+  socket.on('roomShutdown', () => location.reload());
+
+  // ── Helpers ───────────────────────────────────────────────
+  function showErr(id, msg) {
+    const el = document.getElementById(id);
+    el.textContent = msg; el.style.display = 'block';
+    setTimeout(() => el.style.display = 'none', 4000);
+  }
+  function esc(s) { return (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+  function relTime(ts) {
+    const s = Math.floor((Date.now() - ts) / 1000);
+    if (s < 5) return 'just now';
+    if (s < 60) return s + 's ago';
+    return Math.floor(s/60) + 'm ago';
+  }
+  function copyUrl(id) {
+    const val = document.getElementById(id).value;
+    navigator.clipboard.writeText(val).catch(() => {});
+    const btn = event.target;
+    btn.textContent = '✓'; setTimeout(() => btn.textContent = 'Copy', 1500);
+  }
+</script>
+</body>
+</html>

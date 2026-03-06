@@ -1,0 +1,600 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>DeviceChat — Participant</title>
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;700&family=Outfit:wght@300;400;600;800&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg:       #080c10;
+      --s1:       #0e1420;
+      --s2:       #141d2e;
+      --s3:       #1c2840;
+      --border:   #243050;
+      --text:     #c8d8f0;
+      --muted:    #5a7090;
+      --hi:       #60aaff;
+      --green:    #40d080;
+      --orange:   #f0a040;
+      --red:      #f05050;
+      --purple:   #c080ff;
+      --device:   #30e0a0;
+      --mono: 'JetBrains Mono', monospace;
+      --ui:   'Outfit', sans-serif;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: var(--ui); background: var(--bg); color: var(--text); min-height: 100vh; overflow-x: hidden; }
+
+    /* subtle grid bg */
+    body::before {
+      content: '';
+      position: fixed; inset: 0; pointer-events: none; z-index: 0;
+      background-image:
+        linear-gradient(rgba(96,170,255,0.025) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(96,170,255,0.025) 1px, transparent 1px);
+      background-size: 40px 40px;
+    }
+
+    header {
+      position: sticky; top: 0; z-index: 100;
+      background: rgba(8,12,16,0.92); backdrop-filter: blur(12px);
+      border-bottom: 1px solid var(--border);
+      padding: 0 20px; height: 52px;
+      display: flex; align-items: center; gap: 14px;
+    }
+    .logo { font-family: var(--mono); font-weight: 700; font-size: 0.95rem; color: var(--hi); letter-spacing: -0.02em; }
+    .logo em { color: var(--green); font-style: normal; }
+    .pill { font-family: var(--mono); font-size: 0.62rem; padding: 3px 9px; border-radius: 20px; border: 1px solid var(--border); color: var(--muted); background: var(--s2); transition: all .3s; }
+    .pill.live   { color: var(--green);  border-color: #40d08044; background: #40d08012; }
+    .pill.ai-on  { color: var(--purple); border-color: #c080ff44; background: #c080ff12; }
+    .pill.ai-err { color: var(--red);    border-color: #f0505044; }
+    #mcpPill { margin-left: auto; cursor: pointer; }
+
+    /* ── TIMER BAR ── */
+    #timerStrip { height: 2px; background: var(--s2); position: relative; }
+    #timerFill   { height: 2px; background: linear-gradient(90deg, var(--hi), var(--purple)); width: 100%; transition: width 1s linear; }
+
+    /* ── LOGIN ── */
+    #loginWrap { position: relative; z-index: 1; display: flex; align-items: center; justify-content: center; min-height: calc(100vh - 54px); padding: 20px; }
+    #loginBox {
+      background: var(--s1); border: 1px solid var(--border); border-radius: 16px;
+      padding: 36px; width: 100%; max-width: 420px;
+      box-shadow: 0 0 60px rgba(96,170,255,0.06);
+    }
+    #loginBox h2 { font-family: var(--ui); font-size: 1.3rem; font-weight: 800; margin-bottom: 4px; }
+    #loginBox p  { font-size: 0.82rem; color: var(--muted); margin-bottom: 26px; line-height: 1.6; }
+    .field { margin-bottom: 14px; }
+    .field label { display: block; font-size: 0.68rem; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: .09em; margin-bottom: 6px; }
+    .inp { width: 100%; padding: 10px 14px; border: 1px solid var(--border); border-radius: 8px; font-family: var(--mono); font-size: 0.83rem; background: var(--bg); color: var(--text); outline: none; transition: border-color .2s; }
+    .inp:focus { border-color: var(--hi); }
+    select.inp { cursor: pointer; }
+    .btn { display: block; width: 100%; padding: 12px; border: none; border-radius: 8px; font-family: var(--ui); font-weight: 700; font-size: 0.9rem; cursor: pointer; transition: all .15s; }
+    .btn:active { transform: scale(.98); }
+    .btn-hi { background: var(--hi); color: var(--bg); }
+    .btn-hi:hover { background: #80c0ff; }
+    .err { color: var(--red); font-size: .75rem; margin-top: 6px; display: none; }
+
+    /* ── MAIN ── */
+    #mainWrap { position: relative; z-index: 1; display: grid; grid-template-columns: 1fr 280px; gap: 14px; max-width: 1100px; margin: 0 auto; padding: 16px; }
+    @media (max-width: 760px) { #mainWrap { grid-template-columns: 1fr; } }
+
+    /* ── PANEL ── */
+    .panel { background: var(--s1); border: 1px solid var(--border); border-radius: 12px; overflow: hidden; }
+    .ph { padding: 10px 16px; background: var(--s2); border-bottom: 1px solid var(--border); display: flex; align-items: center; gap: 8px; justify-content: space-between; }
+    .pt { font-family: var(--mono); font-size: 0.62rem; font-weight: 700; text-transform: uppercase; letter-spacing: .1em; color: var(--muted); }
+
+    /* ── CHAT FEED ── */
+    #chatFeed { height: 420px; overflow-y: auto; padding: 14px; display: flex; flex-direction: column; gap: 10px; scroll-behavior: smooth; }
+
+    .msg-base { border-radius: 9px; padding: 10px 14px; animation: pop .25s ease; }
+    @keyframes pop { from{opacity:0;transform:translateY(6px)} to{opacity:1;transform:none} }
+    .msg-label { font-family: var(--mono); font-size: .62rem; margin-bottom: 4px; letter-spacing: .04em; }
+    .msg-text  { font-size: .86rem; line-height: 1.55; }
+
+    .msg-chat   { background: var(--s2); border: 1px solid var(--border); }
+    .msg-chat   .msg-label { color: var(--hi); }
+    .msg-chat.me .msg-label { color: var(--green); }
+
+    .msg-device { background: #061a10; border: 1px solid #30e0a033; }
+    .msg-device .msg-label { color: var(--device); }
+    .msg-device .msg-json  { font-family: var(--mono); font-size: .75rem; color: #60e0b0; white-space: pre-wrap; word-break: break-all; line-height: 1.6; }
+
+    .msg-mcp { background: #0e0820; border: 1px solid #c080ff44; }
+    .msg-mcp .msg-label  { color: var(--purple); }
+    .msg-mcp .msg-text   { font-family: var(--mono); font-size: .78rem; color: #d8b0ff; white-space: pre-wrap; }
+    .msg-mcp .msg-tool   { display: inline-block; background: #1e0e40; border: 1px solid #c080ff44; border-radius: 4px; font-family: var(--mono); font-size: .66rem; padding: 2px 8px; color: var(--purple); margin-bottom: 6px; }
+
+    .msg-admin  { background: #1a1000; border: 1px solid #f0a04044; }
+    .msg-admin  .msg-label { color: var(--orange); }
+
+    .msg-sys { text-align: center; font-family: var(--mono); font-size: .64rem; color: var(--muted); padding: 3px 0; }
+
+    /* ── INPUT AREA ── */
+    .inp-area { padding: 12px 14px; border-top: 1px solid var(--border); }
+    .tabs { display: flex; gap: 4px; margin-bottom: 10px; }
+    .tab { padding: 5px 12px; border: 1px solid var(--border); border-radius: 6px; font-family: var(--mono); font-size: .68rem; cursor: pointer; background: transparent; color: var(--muted); transition: all .15s; }
+    .tab.on { background: var(--hi); color: var(--bg); border-color: var(--hi); }
+    .tab.ai-tab.on { background: var(--purple); border-color: var(--purple); }
+
+    #pChat { display: flex; gap: 8px; }
+    #pMCP  { display: none; flex-direction: column; gap: 8px; }
+
+    .row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+    .inp-s { padding: 8px 12px; border: 1px solid var(--border); border-radius: 7px; font-family: var(--mono); font-size: .78rem; background: var(--bg); color: var(--text); outline: none; transition: border-color .2s; }
+    .inp-s:focus { border-color: var(--hi); }
+    .inp-grow { flex: 1; }
+    textarea.inp-s { resize: vertical; min-height: 68px; font-size: .75rem; line-height: 1.5; }
+
+    .btn-s { padding: 8px 14px; border: none; border-radius: 7px; font-family: var(--ui); font-weight: 700; font-size: .78rem; cursor: pointer; transition: all .15s; white-space: nowrap; }
+    .btn-s:active { transform: scale(.96); }
+    .btn-blue   { background: var(--hi);     color: var(--bg); }
+    .btn-blue:hover { background: #80c0ff; }
+    .btn-purple { background: var(--purple); color: var(--bg); }
+    .btn-purple:hover { background: #d8a0ff; }
+    .btn-green  { background: var(--green);  color: var(--bg); }
+    .btn-green:hover { background: #60f0a0; }
+    .btn-ghost  { background: transparent; color: var(--muted); border: 1px solid var(--border); }
+    .btn-ghost:hover { border-color: var(--hi); color: var(--hi); }
+
+    /* MCP thinking indicator */
+    #mcpThinking { display: none; font-family: var(--mono); font-size: .72rem; color: var(--purple); padding: 6px 0; }
+    #mcpThinking span { display: inline-block; animation: blink 1s infinite; }
+    @keyframes blink { 0%,100%{opacity:1} 50%{opacity:.2} }
+
+    /* MCP endpoint display */
+    #mcpEndpointBox { display: none; background: var(--s2); border: 1px solid var(--border); border-radius: 8px; padding: 10px 12px; font-family: var(--mono); font-size: .7rem; color: var(--muted); line-height: 1.8; margin-top: 8px; }
+    #mcpEndpointBox strong { color: var(--hi); }
+    #mcpEndpointBox code { background: var(--bg); padding: 2px 6px; border-radius: 3px; font-size: .66rem; color: var(--purple); user-select: all; }
+
+    /* ── SIDE PANEL ── */
+    .device-item { display: flex; align-items: center; gap: 10px; padding: 9px 14px; border-bottom: 1px solid var(--border); }
+    .device-item:last-child { border-bottom: none; }
+    .d-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--device); flex-shrink: 0; animation: pulse 2s infinite; }
+    @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.3} }
+    .d-name { font-family: var(--mono); font-size: .78rem; color: var(--device); flex: 1; }
+    .d-tools { font-size: .62rem; color: var(--muted); margin-top: 2px; }
+    .cmd-btn { padding: 3px 8px; font-size: .65rem; font-family: var(--mono); border: 1px solid var(--hi); border-radius: 4px; background: transparent; color: var(--hi); cursor: pointer; transition: all .15s; }
+    .cmd-btn:hover { background: var(--hi); color: var(--bg); }
+
+    .p-item { display: flex; align-items: center; gap: 8px; padding: 7px 14px; border-bottom: 1px solid var(--border); font-size: .8rem; }
+    .p-item:last-child { border-bottom: none; }
+    .p-ct { font-family: var(--mono); font-size: .65rem; color: var(--muted); margin-left: auto; }
+
+    #timerLine { font-family: var(--mono); font-size: .65rem; color: var(--muted); padding: 6px 14px 10px; }
+    .empty { padding: 22px; text-align: center; font-family: var(--mono); font-size: .7rem; color: var(--muted); }
+
+    ::-webkit-scrollbar { width: 3px; }
+    ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+  </style>
+</head>
+<body>
+
+<header>
+  <div class="logo">Device<em>Chat</em></div>
+  <div class="pill" id="roomPill" style="display:none"></div>
+  <div class="pill" id="mcpPill" onclick="toggleMcpInfo()">MCP: checking…</div>
+</header>
+<div id="timerStrip"><div id="timerFill"></div></div>
+
+<!-- LOGIN -->
+<div id="loginWrap">
+  <div id="loginBox">
+    <h2>Join a Session</h2>
+    <p>Connect as a participant. Once inside, use the built-in AI to call ESP32 device tools over MCP — or just chat.</p>
+    <div class="field"><label>Your Name</label><input id="pName" class="inp" placeholder="e.g. Alice" autocomplete="off"></div>
+    <div class="field"><label>Room</label><select id="pRoom" class="inp"><option value="">— loading —</option></select></div>
+    <div id="pErr" class="err"></div>
+    <button class="btn btn-hi" id="joinBtn">Join Room →</button>
+  </div>
+</div>
+
+<!-- MAIN -->
+<div id="mainWrap" style="display:none">
+
+  <div style="display:flex;flex-direction:column;gap:12px;">
+
+    <div class="panel">
+      <div class="ph">
+        <div class="pt">📡 Live Feed</div>
+        <div style="font-size:.65rem;color:var(--muted);font-family:var(--mono);" id="msgCount">0 messages</div>
+      </div>
+      <div id="chatFeed"><div class="msg-sys">Joined — waiting for messages…</div></div>
+
+      <div class="inp-area">
+        <div class="tabs">
+          <button class="tab on"    id="tChat">💬 Chat</button>
+          <button class="tab ai-tab" id="tMCP">🤖 AI + MCP Tools</button>
+        </div>
+
+        <!-- Chat pane -->
+        <div id="pChat">
+          <input id="chatIn" class="inp-s inp-grow" placeholder="Type a message… (Enter)">
+          <button class="btn-s btn-blue" id="chatSend">Send</button>
+        </div>
+
+        <!-- MCP / AI pane -->
+        <div id="pMCP">
+          <div id="mcpEndpointBox">
+            <div><strong>MCP Endpoint</strong> — add to Chrome's WebMCP settings:</div>
+            <div style="margin-top:6px;">HTTP: <code id="mcpUrl">—</code></div>
+            <div>SSE:  <code id="mcpSseUrl">—</code></div>
+          </div>
+
+          <div style="font-size:.72rem;color:var(--muted);line-height:1.7;padding:4px 0;">
+            The built-in AI can call device tools directly via MCP.
+            Type naturally — it will call <code style="font-family:var(--mono);background:var(--s2);padding:1px 5px;border-radius:3px;font-size:.66rem;">device_display</code>, <code style="font-family:var(--mono);background:var(--s2);padding:1px 5px;border-radius:3px;font-size:.66rem;">device_ping</code>, etc.
+          </div>
+
+          <textarea id="mcpPromptIn" class="inp-s" placeholder="e.g. Show 'Hello Lab!' on the OLED, then ping the device to check latency…"></textarea>
+          <div id="mcpThinking"><span>▋</span> AI is calling MCP tools…</div>
+
+          <div class="row">
+            <button class="btn-s btn-purple" id="mcpRun">🤖 Ask AI</button>
+            <button class="btn-s btn-ghost"  id="mcpTools">📋 List Tools</button>
+            <button class="btn-s btn-ghost"  id="mcpDevices">🔌 List Devices</button>
+            <button class="btn-s btn-green"  id="mcpEndpoint" style="font-size:.68rem;">⚙ MCP Endpoints</button>
+          </div>
+
+          <div id="mcpNotAvail" style="display:none;background:#1a0808;border:1px solid #f0505033;border-radius:7px;padding:10px 12px;font-size:.72rem;color:#f08080;line-height:1.7;margin-top:4px;">
+            <strong>Chrome Built-in AI not available.</strong><br>
+            Requires Chrome Canary with <code style="font-family:var(--mono);background:#0a0404;padding:1px 5px;border-radius:3px;">chrome://flags/#prompt-api-for-gemini-nano</code> → Enabled.<br>
+            You can still use the MCP endpoint URL above with any external MCP client.
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- SIDE -->
+  <div style="display:flex;flex-direction:column;gap:12px;">
+
+    <div class="panel">
+      <div class="ph"><div class="pt">🔌 Devices (MCP Tools)</div><div id="devCount" class="pt">0</div></div>
+      <div id="devList"><div class="empty">No devices online</div></div>
+    </div>
+
+    <div class="panel">
+      <div class="ph"><div class="pt">👥 Participants</div></div>
+      <div id="partList"><div class="empty">—</div></div>
+      <div id="timerLine">—</div>
+    </div>
+
+    <div class="panel">
+      <div class="ph"><div class="pt">ℹ How It Works</div></div>
+      <div style="padding:14px;font-size:.78rem;color:var(--muted);line-height:1.75;">
+        <p>Each connected ESP32 registers as an <strong style="color:var(--hi)">MCP tool server</strong>.</p>
+        <p style="margin-top:8px;">The AI in your browser can directly call tools like <strong style="color:var(--device)">display</strong>, <strong style="color:var(--device)">ping</strong>, <strong style="color:var(--device)">get_status</strong> on real hardware.</p>
+        <p style="margin-top:8px;">You can also add the MCP endpoint to any MCP client (Claude Desktop, etc.).</p>
+      </div>
+    </div>
+
+  </div>
+
+</div><!-- mainWrap -->
+
+<script src="/socket.io/socket.io.js"></script>
+<script>
+const socket = io();
+let myName = '', myRoom = '', myTimerMax = 120;
+let mcpSession = null;
+let mcpEndpoint = '', mcpSseUrl = '';
+let msgCount = 0;
+
+// ── Room list ─────────────────────────────────────────────
+socket.on('roomList', list => {
+  const sel = document.getElementById('pRoom');
+  sel.innerHTML = list.length
+    ? list.map(r => `<option value="${r}">${r}</option>`).join('')
+    : '<option value="">No rooms yet</option>';
+});
+
+// ── Join ──────────────────────────────────────────────────
+document.getElementById('joinBtn').onclick = join;
+document.getElementById('pName').onkeydown  = e => e.key === 'Enter' && join();
+
+function join() {
+  myName = document.getElementById('pName').value.trim();
+  myRoom = document.getElementById('pRoom').value;
+  if (!myName) { showErr('pErr', 'Enter your name.'); return; }
+  if (!myRoom) { showErr('pErr', 'Select a room.'); return; }
+  socket.emit('participantJoin', { roomName: myRoom, name: myName });
+}
+
+socket.on('joinError', m => showErr('pErr', m));
+
+socket.on('joinSuccess', async data => {
+  myRoom = data.roomName;
+  mcpEndpoint = data.mcpEndpoint;
+  mcpSseUrl   = data.mcpSse;
+
+  document.getElementById('loginWrap').style.display = 'none';
+  document.getElementById('mainWrap').style.display  = 'grid';
+  document.getElementById('roomPill').textContent = '# ' + data.roomName;
+  document.getElementById('roomPill').style.display = 'block';
+  document.getElementById('mcpUrl').textContent    = data.mcpEndpoint;
+  document.getElementById('mcpSseUrl').textContent = data.mcpSse;
+
+  await initMCP();
+});
+
+// ── Chat ──────────────────────────────────────────────────
+document.getElementById('chatSend').onclick = sendChat;
+document.getElementById('chatIn').onkeydown = e => { if (e.key === 'Enter' && !e.shiftKey) sendChat(); };
+function sendChat() {
+  const v = document.getElementById('chatIn').value.trim();
+  if (!v) return;
+  socket.emit('chatSend', { roomName: myRoom, text: v });
+  document.getElementById('chatIn').value = '';
+}
+
+// ── Incoming messages ─────────────────────────────────────
+socket.on('chatMessage', d => {
+  if (d.type === 'chat')  appendMsg('chat',   d.from, d.text, d.from === myName);
+  if (d.type === 'admin') appendMsg('admin',  d.from, d.text);
+});
+socket.on('deviceMessage', d => appendDeviceMsg(d.from, d.payload));
+socket.on('mcpToolCall',   d => appendMcpCall(d));
+
+// ── Presence ──────────────────────────────────────────────
+socket.on('presenceUpdate', data => {
+  renderDevices(data.devices || []);
+  renderParts(data.participants || []);
+});
+
+function renderDevices(devs) {
+  const el = document.getElementById('devList');
+  document.getElementById('devCount').textContent = devs.length;
+  if (!devs.length) { el.innerHTML = '<div class="empty">No devices online</div>'; return; }
+  el.innerHTML = devs.map(d => `
+    <div class="device-item">
+      <div class="d-dot"></div>
+      <div style="flex:1">
+        <div class="d-name">${esc(d.name)}</div>
+        <div class="d-tools">MCP tools: ${esc(d.name.toLowerCase().replace(/[^a-z0-9]/g,'_'))}_display / _ping / _status…</div>
+      </div>
+      <button class="cmd-btn" onclick="quickPrompt('${esc(d.name)}')">⚡ AI</button>
+    </div>`).join('');
+}
+
+function renderParts(parts) {
+  const el = document.getElementById('partList');
+  if (!parts.length) { el.innerHTML = '<div class="empty">—</div>'; return; }
+  el.innerHTML = parts.map(p => `
+    <div class="p-item">
+      <span>${esc(p.name)}${p.name===myName?' <span style="color:var(--muted);font-size:.65rem">(you)</span>':''}</span>
+      <span class="p-ct">${p.msgCount||0}</span>
+    </div>`).join('');
+}
+
+function quickPrompt(deviceName) {
+  document.getElementById('mcpPromptIn').value = `Get the status of device "${deviceName}" and show a welcome message on its OLED.`;
+  switchTab('mcp');
+  document.getElementById('mcpPromptIn').focus();
+}
+
+// ── Timer ─────────────────────────────────────────────────
+socket.on('timerSync', val => {
+  const pct = Math.max(0, val / myTimerMax * 100);
+  document.getElementById('timerFill').style.width = pct + '%';
+  document.getElementById('timerLine').textContent = val + 's remaining';
+});
+socket.on('timerState', d => { myTimerMax = d.duration; });
+
+// ── Shutdown/kick ─────────────────────────────────────────
+socket.on('roomShutdown', m => { alert('⚠️ ' + m); location.reload(); });
+socket.on('kicked',       m => { alert('⚠️ ' + m); location.reload(); });
+
+// ── Tab switching ─────────────────────────────────────────
+document.getElementById('tChat').onclick = () => switchTab('chat');
+document.getElementById('tMCP').onclick  = () => switchTab('mcp');
+function switchTab(t) {
+  document.getElementById('pChat').style.display = t === 'chat' ? 'flex' : 'none';
+  document.getElementById('pMCP').style.display  = t === 'mcp'  ? 'flex' : 'none';
+  document.getElementById('tChat').className = 'tab' + (t==='chat' ? ' on' : '');
+  document.getElementById('tMCP').className  = 'tab ai-tab' + (t==='mcp' ? ' on' : '');
+}
+
+// ── MCP endpoint info toggle ──────────────────────────────
+document.getElementById('mcpEndpoint').onclick = toggleMcpInfo;
+function toggleMcpInfo() {
+  const b = document.getElementById('mcpEndpointBox');
+  b.style.display = b.style.display === 'block' ? 'none' : 'block';
+}
+
+// ── Chrome Canary WebMCP (LanguageModel API) ──────────────
+async function initMCP() {
+  const pill = document.getElementById('mcpPill');
+  const notAvail = document.getElementById('mcpNotAvail');
+
+  const api = getAiApi();
+  if (!api) {
+    pill.textContent = 'MCP: no AI'; pill.className = 'pill ai-err';
+    notAvail.style.display = 'block';
+    return;
+  }
+  pill.textContent = 'MCP: loading…'; pill.className = 'pill';
+  try {
+    // Create session with MCP tool definitions injected as system context
+    mcpSession = await api.create({ outputLanguage: 'en' });
+    pill.textContent = 'MCP: AI ready ✓'; pill.className = 'pill ai-on';
+  } catch (e) {
+    pill.textContent = 'MCP: AI error'; pill.className = 'pill ai-err';
+    notAvail.style.display = 'block';
+  }
+}
+
+function getAiApi() {
+  if (typeof LanguageModel !== 'undefined') return LanguageModel;
+  if (window.ai && window.ai.languageModel) return window.ai.languageModel;
+  return null;
+}
+
+// ── MCP tool call via HTTP ────────────────────────────────
+async function callMcpTool(toolName, args) {
+  const res = await fetch(mcpEndpoint, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      jsonrpc: '2.0', id: Date.now(),
+      method: 'tools/call',
+      params: { name: toolName, arguments: args }
+    })
+  });
+  const json = await res.json();
+  if (json.error) throw new Error(json.error.message);
+  return json.result?.content?.[0]?.text || '(no reply)';
+}
+
+async function getMcpTools() {
+  const res = await fetch(mcpEndpoint, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'tools/list', params: {} })
+  });
+  const json = await res.json();
+  return json.result?.tools || [];
+}
+
+// ── AI runs with MCP tool loop ────────────────────────────
+document.getElementById('mcpRun').onclick = runAI;
+document.getElementById('mcpPromptIn').onkeydown = e => { if (e.key === 'Enter' && e.ctrlKey) runAI(); };
+
+document.getElementById('mcpTools').onclick = async () => {
+  const tools = await getMcpTools();
+  const text = tools.map(t => `• ${t.name}: ${t.description}`).join('\n');
+  appendMcpResult('📋 Available MCP Tools', text);
+};
+
+document.getElementById('mcpDevices').onclick = async () => {
+  const result = await callMcpTool('list_devices', {});
+  appendMcpResult('🔌 Device List', result);
+};
+
+async function runAI() {
+  const prompt = document.getElementById('mcpPromptIn').value.trim();
+  if (!prompt) return;
+  if (!mcpSession) { appendMcpResult('Error', 'AI not available. See setup instructions.'); return; }
+
+  document.getElementById('mcpThinking').style.display = 'block';
+  document.getElementById('mcpRun').disabled = true;
+
+  try {
+    // 1. Fetch current tool list from MCP server
+    const tools = await getMcpTools();
+    const toolDefs = tools.map(t =>
+      `  - ${t.name}(${Object.keys(t.inputSchema?.properties || {}).join(', ')}): ${t.description}`
+    ).join('\n');
+
+    // 2. Ask AI to plan which tools to call
+    const planPrompt = `You control IoT devices via MCP tools. The user wants:
+"${prompt}"
+
+Available MCP tools:
+${toolDefs}
+
+Reply with a JSON array of tool calls to make, in order. Each item: {"tool":"tool_name","args":{...}}
+If no tools are needed, reply with [].
+Reply with ONLY the JSON array, no markdown, no explanation.`;
+
+    const planRaw = await mcpSession.prompt(planPrompt);
+    const clean = planRaw.trim().replace(/^```json?\n?/, '').replace(/\n?```$/, '').trim();
+
+    let plan = [];
+    try { plan = JSON.parse(clean); } catch (e) {
+      // AI gave non-JSON — just show it as a response
+      appendMcpResult('🤖 AI', planRaw);
+      return;
+    }
+
+    if (!Array.isArray(plan) || plan.length === 0) {
+      // No tool calls — just ask AI to respond conversationally
+      const reply = await mcpSession.prompt(prompt);
+      appendMcpResult('🤖 AI', reply);
+      return;
+    }
+
+    // 3. Execute each tool call
+    const results = [];
+    for (const step of plan) {
+      appendMcpToolCall(step.tool, step.args);
+      try {
+        const result = await callMcpTool(step.tool, step.args || {});
+        results.push(`${step.tool} → ${result}`);
+      } catch (e) {
+        results.push(`${step.tool} → ERROR: ${e.message}`);
+      }
+    }
+
+    // 4. Ask AI to summarise what happened
+    const summary = await mcpSession.prompt(
+      `The user asked: "${prompt}"\nI executed these MCP tool calls:\n${results.join('\n')}\nWrite a brief, friendly 1-2 sentence summary of what happened.`
+    );
+    appendMcpResult('🤖 AI Summary', summary);
+    document.getElementById('mcpPromptIn').value = '';
+
+  } catch (e) {
+    appendMcpResult('Error', e.message);
+  } finally {
+    document.getElementById('mcpThinking').style.display = 'none';
+    document.getElementById('mcpRun').disabled = false;
+  }
+}
+
+// ── Feed helpers ──────────────────────────────────────────
+function appendMsg(type, from, text, isSelf) {
+  const feed = document.getElementById('chatFeed');
+  const d = document.createElement('div');
+  d.className = `msg-base msg-${type}${isSelf ? ' me' : ''}`;
+  d.innerHTML = `<div class="msg-label">${esc(from)}</div><div class="msg-text">${esc(text)}</div>`;
+  feed.appendChild(d); feed.scrollTop = feed.scrollHeight;
+  msgCount++;
+  document.getElementById('msgCount').textContent = msgCount + ' messages';
+}
+
+function appendDeviceMsg(from, payload) {
+  const feed = document.getElementById('chatFeed');
+  const d = document.createElement('div');
+  d.className = 'msg-base msg-device';
+  d.innerHTML = `<div class="msg-label">📡 ${esc(from)}</div><div class="msg-json">${esc(JSON.stringify(payload, null, 2))}</div>`;
+  feed.appendChild(d); feed.scrollTop = feed.scrollHeight;
+  msgCount++;
+  document.getElementById('msgCount').textContent = msgCount + ' messages';
+}
+
+function appendMcpToolCall(toolName, args) {
+  const feed = document.getElementById('chatFeed');
+  const d = document.createElement('div');
+  d.className = 'msg-base msg-mcp';
+  d.innerHTML = `<div class="msg-label">🤖 MCP Tool Call</div><div class="msg-tool">⚡ ${esc(toolName)}</div><div class="msg-text">${esc(JSON.stringify(args, null, 2))}</div>`;
+  feed.appendChild(d); feed.scrollTop = feed.scrollHeight;
+}
+
+function appendMcpResult(label, text) {
+  const feed = document.getElementById('chatFeed');
+  const d = document.createElement('div');
+  d.className = 'msg-base msg-mcp';
+  d.innerHTML = `<div class="msg-label">${esc(label)}</div><div class="msg-text">${esc(text)}</div>`;
+  feed.appendChild(d); feed.scrollTop = feed.scrollHeight;
+  msgCount++;
+  document.getElementById('msgCount').textContent = msgCount + ' messages';
+}
+
+function appendMcpCall(data) {
+  const feed = document.getElementById('chatFeed');
+  const d = document.createElement('div');
+  d.className = 'msg-base msg-mcp';
+  d.innerHTML = `<div class="msg-label">⚡ MCP Tool Called</div><div class="msg-tool">${esc(data.tool)}</div><div class="msg-text" style="font-size:.72rem;color:var(--muted)">→ ${esc(data.deviceName || data.result || '')}</div>`;
+  feed.appendChild(d); feed.scrollTop = feed.scrollHeight;
+}
+
+function showErr(id, m) {
+  const el = document.getElementById(id);
+  el.textContent = m; el.style.display = 'block';
+  setTimeout(() => el.style.display = 'none', 4000);
+}
+function esc(s) { return (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+</script>
+</body>
+</html>
